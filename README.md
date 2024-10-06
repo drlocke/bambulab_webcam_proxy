@@ -8,6 +8,7 @@ This file *has* to be copied into the root directory of this project and replace
 From time to time the content of the `url.txt` file need to be updated. An automatic update is a future idea but I haven't figured out the required endpoint yet. Should be burried in the slicer code: https://github.com/bambulab/BambuStudio
 
 A manual update is still simple enough. Just disable and enable the live view in the slicer again. This should generate a new `url.txt` file in the user profile folder which you can then copy to the root of this project again.
+(REST endpoint for required data? https://github.com/Doridian/OpenBambuAPI/blob/main/cloud-http.md#post-v1iot-serviceapiuserttcode )
 # Start Stream
 Just execute the `start_streaming.bat` file. You can close the main window afterwards.
 # Stop Stream
