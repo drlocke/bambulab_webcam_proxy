@@ -1,8 +1,9 @@
 ## Bambu Lab Live Stream for ReactPlayer on Windows
 # Setup
-Follow the steps under https://wiki.bambulab.com/en/software/bambu-studio/virtual-camera to activate the live view at least once. 
+For the correct configuration file you need to install the BambuSlicer: https://github.com/bambulab/BambuStudio
+Then follow the steps under https://wiki.bambulab.com/en/software/bambu-studio/virtual-camera to activate the live view at least once. 
 This will create an `url.txt` file in the folder `%USERPROFILE%\AppData\Roaming\BambuStudio\cameratools`.
-This file *has* to be copied into the root directory of this project and replace the empty dummy file. 
+This file *has* to be copied into the root directory of this project and replaces the empty dummy file. 
 
 From time to time the content of the `url.txt` file need to be updated. An automatic update is a future idea but I haven't figured out the required endpoint yet. Should be burried in the slicer code: https://github.com/bambulab/BambuStudio
 
