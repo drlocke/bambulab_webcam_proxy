@@ -1,1 +1,12 @@
 url.txt
+config.local.psd1
+runtime/
+tools/
+web/node_modules/
+nginx/logs/*.log
+nginx/logs/nginx.pid
+/nginx/temp/
+/BambuSource.dll
+/bambu_source.exe
+/ffmpeg.exe
+/live555.dll
