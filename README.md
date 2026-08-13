@@ -57,10 +57,14 @@ change, cache, decode, or re-encode the stream.
 
 - Windows 10 or newer
 - Current Bambu Studio with CameraTools installed
-- Node.js 22.12 or newer, only for building the example app
+- Node.js 22.12 or newer; setup installs a pinned local copy with npm when an
+  adequate system installation is unavailable
 - PowerShell 5.1 or newer
 
-`scripts/setup.ps1` downloads checksum-pinned MediaMTX and stable nginx builds.
+`scripts/setup.ps1` downloads checksum-pinned Node.js, MediaMTX, and stable nginx
+builds as needed. A downloaded Node.js installation remains under `tools\node`
+and is used by both the web build and Multi-mode backend without changing the
+machine-wide installation.
 CameraTools is used from `%APPDATA%\BambuStudio\cameratools`; vendor binaries and
 camera credentials are not copied into this repository.
 

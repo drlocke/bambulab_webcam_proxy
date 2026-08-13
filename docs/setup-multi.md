@@ -29,7 +29,8 @@ the list and overview.
 ## Requirements
 
 - Windows 10 or newer
-- Node.js 22.12 or newer
+- Node.js 22.12 or newer; setup installs a pinned repository-local copy with npm
+  when an adequate system installation is unavailable
 - Current Bambu Studio with Virtual Camera/CameraTools installed once
 - PowerShell 5.1 or newer
 - A Bambu account with a password or email-code login

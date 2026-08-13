@@ -25,6 +25,10 @@ $requiredFiles = @(
 )
 if ($config.DeploymentMode -eq 'Multi') {
     $requiredFiles += (Join-Path $config.CameraToolsPath 'bambu_source.exe'), (Join-Path $config.CameraToolsPath 'ffmpeg.exe')
+    $nodeToolchain = Get-NodeToolchain -Root $root -MinimumVersion ([version]'22.12.0')
+    if (-not $nodeToolchain) {
+        throw 'Node.js 22.12 or newer is unavailable. Run scripts\setup.ps1 first.'
+    }
 } elseif ([string]::IsNullOrWhiteSpace($config.PrinterStreamUrl)) {
     $requiredFiles += (Join-Path $config.CameraToolsPath 'bambu_source.exe'), (Join-Path $config.CameraToolsPath 'ffmpeg.exe'), $config.CameraUrlFile
 }
@@ -91,8 +95,7 @@ try {
         [IO.File]::WriteAllText($backendConfigPath, $backendConfig, (New-Object Text.UTF8Encoding($false)))
         $backendOut = Join-Path $logDir 'server.log'
         $backendErr = Join-Path $logDir 'server-error.log'
-        $node = (Get-Command node.exe -ErrorAction Stop).Source
-        $backend = Start-Process $node -ArgumentList @((Join-Path $root 'server\server.js'), $backendConfigPath) -WorkingDirectory $root -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr -PassThru -WindowStyle Hidden
+        $backend = Start-Process $nodeToolchain.Node -ArgumentList @((Join-Path $root 'server\server.js'), $backendConfigPath) -WorkingDirectory $root -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr -PassThru -WindowStyle Hidden
         Wait-HttpReady "http://127.0.0.1:$servicePort/api/config" | Out-Null
     }
 

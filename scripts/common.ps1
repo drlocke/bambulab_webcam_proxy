@@ -44,3 +44,39 @@ function Test-ProcessId {
 
     return $null -ne (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
 }
+
+function Get-NodeToolchain {
+    param(
+        [string] $Root,
+        [version] $MinimumVersion
+    )
+
+    $candidates = @()
+    $systemNode = Get-Command node.exe -ErrorAction SilentlyContinue
+    $systemNpm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if ($systemNode -and $systemNpm) {
+        $candidates += [pscustomobject]@{ Node = $systemNode.Source; Npm = $systemNpm.Source }
+    }
+
+    $localNode = Join-Path $Root 'tools\node\node.exe'
+    $localNpm = Join-Path $Root 'tools\node\npm.cmd'
+    if ((Test-Path $localNode) -and (Test-Path $localNpm)) {
+        $candidates += [pscustomobject]@{ Node = $localNode; Npm = $localNpm }
+    }
+
+    foreach ($candidate in $candidates) {
+        try {
+            $installedVersion = [version]((& $candidate.Node --version).TrimStart('v'))
+            if ($installedVersion -ge $MinimumVersion) {
+                return [pscustomobject]@{
+                    Node = $candidate.Node
+                    Npm = $candidate.Npm
+                    Version = $installedVersion
+                }
+            }
+        } catch {
+            continue
+        }
+    }
+    return $null
+}

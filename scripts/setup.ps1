@@ -18,8 +18,37 @@ if ($Mode) {
 if ($config.DeploymentMode -notin @('Legacy', 'Multi')) {
     throw "DeploymentMode must be 'Legacy' or 'Multi'."
 }
-if ($config.DeploymentMode -eq 'Multi' -and -not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
-    throw 'Node.js 22.12 or newer is required for Multi deployment mode.'
+
+$minimumNodeVersion = [version]'22.12.0'
+$nodeToolchain = Get-NodeToolchain -Root $root -MinimumVersion $minimumNodeVersion
+if (-not $nodeToolchain) {
+    $version = $config.NodeVersion
+    $archiveName = "node-v$version-win-x64.zip"
+    $archive = Join-Path $env:TEMP $archiveName
+    $downloadUrl = "https://nodejs.org/dist/v$version/$archiveName"
+
+    Write-Host "Downloading Node.js v$version..."
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $archive
+    $actualHash = (Get-FileHash $archive -Algorithm SHA256).Hash
+    if ($actualHash -ne $config.NodeSha256) {
+        Remove-Item $archive -Force
+        throw "Node.js archive checksum mismatch. Expected $($config.NodeSha256), got $actualHash."
+    }
+
+    $nodeDir = Join-Path $root 'tools\node'
+    $extractDir = Join-Path $env:TEMP "bambu-node-$version"
+    Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $nodeDir -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive $archive $extractDir
+    New-Item (Split-Path $nodeDir -Parent) -ItemType Directory -Force | Out-Null
+    Move-Item (Join-Path $extractDir "node-v$version-win-x64") $nodeDir
+    Remove-Item $archive, $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    $env:PATH = "$nodeDir;$env:PATH"
+    $nodeToolchain = Get-NodeToolchain -Root $root -MinimumVersion $minimumNodeVersion
+    if (-not $nodeToolchain) {
+        throw "The downloaded Node.js v$version toolchain could not be started."
+    }
 }
 
 if ($config.DeploymentMode -eq 'Multi' -or [string]::IsNullOrWhiteSpace($config.PrinterStreamUrl)) {
@@ -78,18 +107,15 @@ if (-not (Test-Path $nginxExe)) {
 }
 
 if (-not $SkipWebBuild) {
-    if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) {
-        throw 'Node.js/npm is required to build the React example.'
-    }
     Push-Location (Join-Path $root 'web')
     try {
         if (Test-Path 'package-lock.json') {
-            & npm.cmd ci
+            & $nodeToolchain.Npm ci
         } else {
-            & npm.cmd install
+            & $nodeToolchain.Npm install
         }
         if ($LASTEXITCODE -ne 0) { throw 'npm dependency installation failed.' }
-        & npm.cmd run build
+        & $nodeToolchain.Npm run build
         if ($LASTEXITCODE -ne 0) { throw 'React example build failed.' }
     } finally {
         Pop-Location
