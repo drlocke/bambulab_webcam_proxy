@@ -48,26 +48,32 @@ function Test-ProcessId {
 function Get-NodeToolchain {
     param(
         [string] $Root,
-        [version] $MinimumVersion
+        [version] $MinimumVersion,
+        [version] $ExactVersion
     )
 
     $candidates = @()
-    $systemNode = Get-Command node.exe -ErrorAction SilentlyContinue
-    $systemNpm = Get-Command npm.cmd -ErrorAction SilentlyContinue
-    if ($systemNode -and $systemNpm) {
-        $candidates += [pscustomobject]@{ Node = $systemNode.Source; Npm = $systemNpm.Source }
-    }
-
     $localNode = Join-Path $Root 'tools\node\node.exe'
     $localNpm = Join-Path $Root 'tools\node\npm.cmd'
     if ((Test-Path $localNode) -and (Test-Path $localNpm)) {
         $candidates += [pscustomobject]@{ Node = $localNode; Npm = $localNpm }
     }
 
+    $systemNode = Get-Command node.exe -ErrorAction SilentlyContinue
+    $systemNpm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if ($systemNode -and $systemNpm) {
+        $candidates += [pscustomobject]@{ Node = $systemNode.Source; Npm = $systemNpm.Source }
+    }
+
     foreach ($candidate in $candidates) {
         try {
             $installedVersion = [version]((& $candidate.Node --version).TrimStart('v'))
-            if ($installedVersion -ge $MinimumVersion) {
+            $matchesVersion = if ($ExactVersion) {
+                $installedVersion -eq $ExactVersion
+            } else {
+                $installedVersion -ge $MinimumVersion
+            }
+            if ($matchesVersion) {
                 return [pscustomobject]@{
                     Node = $candidate.Node
                     Npm = $candidate.Npm

@@ -19,8 +19,8 @@ if ($config.DeploymentMode -notin @('Legacy', 'Multi')) {
     throw "DeploymentMode must be 'Legacy' or 'Multi'."
 }
 
-$minimumNodeVersion = [version]'22.12.0'
-$nodeToolchain = Get-NodeToolchain -Root $root -MinimumVersion $minimumNodeVersion
+$requiredNodeVersion = [version]$config.NodeVersion
+$nodeToolchain = Get-NodeToolchain -Root $root -ExactVersion $requiredNodeVersion
 if (-not $nodeToolchain) {
     $version = $config.NodeVersion
     $archiveName = "node-v$version-win-x64.zip"
@@ -45,7 +45,7 @@ if (-not $nodeToolchain) {
     Remove-Item $archive, $extractDir -Recurse -Force -ErrorAction SilentlyContinue
 
     $env:PATH = "$nodeDir;$env:PATH"
-    $nodeToolchain = Get-NodeToolchain -Root $root -MinimumVersion $minimumNodeVersion
+    $nodeToolchain = Get-NodeToolchain -Root $root -ExactVersion $requiredNodeVersion
     if (-not $nodeToolchain) {
         throw "The downloaded Node.js v$version toolchain could not be started."
     }
