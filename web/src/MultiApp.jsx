@@ -92,7 +92,7 @@ function StreamTile({ printer, stream, controls = false }) {
   const failed = stream?.status === 'error';
   const live = stream?.status === 'live';
   const playerUrl = stream?.whepUrl
-    ? withBasePath(stream.whepUrl.replace(/\/whep$/, `?autoplay=true&muted=true&controls=${controls}`))
+    ? withBasePath(stream.whepUrl.replace(/\/whep$/, `/?autoplay=true&muted=true&controls=${controls}`))
     : null;
   return (
     <article className="stream-tile" data-offline={!printer.online}>

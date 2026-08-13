@@ -119,6 +119,12 @@ significant. It makes nginx forward `/bambucam/api/config` as `/api/config`.
 `proxy_redirect` performs the inverse translation for WHEP session URLs
 returned by MediaMTX.
 
+The project nginx emits MediaMTX redirects as relative URLs. This is required
+for WHEP session `PATCH` and `DELETE` requests to remain on the public HTTPS
+host. If browser diagnostics show requests to
+`http://PUBLIC_HOST:8090/webrtc/...`, update and restart the project; that older
+redirect behavior is blocked by browsers as mixed content.
+
 After rebuilding and restarting, direct local access works at both
 `http://127.0.0.1:8090/` and `http://127.0.0.1:8090/bambucam/`. The root page
 loads the same subpath-aware build; its assets, API calls, and Legacy player
