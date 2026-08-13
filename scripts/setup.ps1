@@ -1,11 +1,28 @@
-param([switch] $SkipWebBuild)
+param(
+    [switch] $SkipWebBuild,
+    [ValidateSet('Legacy', 'Multi')][string] $Mode = ''
+)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'common.ps1')
 $config = Get-ProjectConfig $root
 
-if ([string]::IsNullOrWhiteSpace($config.PrinterStreamUrl)) {
+if ($Mode) {
+    Write-Host "Requested deployment mode: $Mode"
+    if ($config.DeploymentMode -ne $Mode) {
+        Write-Warning "Set DeploymentMode = '$Mode' in config.local.psd1 before starting the proxy."
+    }
+}
+
+if ($config.DeploymentMode -notin @('Legacy', 'Multi')) {
+    throw "DeploymentMode must be 'Legacy' or 'Multi'."
+}
+if ($config.DeploymentMode -eq 'Multi' -and -not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
+    throw 'Node.js 22.12 or newer is required for Multi deployment mode.'
+}
+
+if ($config.DeploymentMode -eq 'Multi' -or [string]::IsNullOrWhiteSpace($config.PrinterStreamUrl)) {
     $requiredCameraTools = @('bambu_source.exe', 'ffmpeg.exe', 'BambuSource.dll', 'live555.dll', 'agora_rtc_sdk.dll', 'libaosl.dll', 'libagora-ffmpeg.dll', 'libagora-soundtouch.dll')
     $missingCameraTools = $requiredCameraTools | Where-Object { -not (Test-Path (Join-Path $config.CameraToolsPath $_)) }
     if ($missingCameraTools) {

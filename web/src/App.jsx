@@ -1,57 +1,21 @@
 import { useEffect, useState } from 'react';
-
-const streamName = 'bambu';
+import { LegacyApp } from './LegacyApp';
+import { MultiApp } from './MultiApp';
 
 export function App() {
-  const [ready, setReady] = useState(false);
+  const [mode, setMode] = useState('loading');
 
   useEffect(() => {
-    let active = true;
-    const update = async () => {
-      try {
-        const response = await fetch('/api/paths', { cache: 'no-store' });
-        const body = await response.json();
-        const stream = body.items?.find((item) => item.name === streamName);
-        if (active) setReady(Boolean(stream?.ready));
-      } catch {
-        if (active) setReady(false);
-      }
-    };
-
-    update();
-    const timer = window.setInterval(update, 3000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
+    const controller = new AbortController();
+    fetch('/api/config', { cache: 'no-store', signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((config) => setMode(config?.mode === 'multi' ? 'multi' : 'legacy'))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setMode('legacy');
+      });
+    return () => controller.abort();
   }, []);
 
-  return (
-    <main>
-      <header>
-        <div>
-          <p className="eyebrow">Bambu Lab camera proxy</p>
-          <h1>Live view</h1>
-        </div>
-        <div className="status" data-ready={ready} role="status">
-          <span aria-hidden="true" />
-          {ready ? 'Live' : 'Connecting'}
-        </div>
-      </header>
-
-      <section className="viewer" aria-label="Printer camera stream">
-        <iframe
-          src={`/webrtc/${streamName}?autoplay=true&muted=true&controls=true`}
-          title="Bambu printer live stream"
-          allow="autoplay; fullscreen; picture-in-picture"
-        />
-        {!ready && <div className="waiting">Waiting for camera frames</div>}
-      </section>
-
-      <footer>
-        <p>WebRTC transport</p>
-        <p>Low-latency live video</p>
-      </footer>
-    </main>
-  );
+  if (mode === 'loading') return <div className="boot-screen">Loading</div>;
+  return mode === 'multi' ? <MultiApp /> : <LegacyApp />;
 }

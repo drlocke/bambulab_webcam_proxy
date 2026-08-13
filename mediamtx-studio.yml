@@ -39,3 +39,4 @@ paths:
       a=fmtp:96 packetization-mode=1; sprop-parameter-sets=Z0LAH42NUCSC2TZAAAADAEAAAA8jwiEagA==,aM4xsgA=; profile-level-id=42C01F
   bambu:
     source: publisher
+  all_others:

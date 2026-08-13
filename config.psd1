@@ -1,9 +1,16 @@
 @{
+    DeploymentMode = 'Legacy'
     CameraToolsPath = ''
     CameraUrlFile = ''
     PrinterStreamUrl = ''
     HttpPort = 8090
     StreamName = 'bambu'
+    BambuApiBaseUrl = 'https://api.bambulab.com'
+    BambuRegion = ''
+    BambuClientVersion = '02.03.00.00'
+    BambuNetworkVersion = '00.00.32.00'
+    MultiSessionSecret = ''
+    SecureCookies = $false
     MediaMTXVersion = '1.20.0'
     MediaMTXSha256 = '7364E7672E6B4420E986EC4B56E2CC32EC7B4085F69B56EC224D596D0FA8B19F'
     NginxVersion = '1.30.4'

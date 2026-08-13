@@ -8,7 +8,7 @@ if (-not (Test-Path $stateFile)) {
 }
 
 $state = Get-Content $stateFile -Raw | ConvertFrom-Json
-foreach ($processId in @($state.supervisorPid, $state.nginxPid, $state.mediaMtxPid)) {
+foreach ($processId in @($state.supervisorPid, $state.backendPid, $state.nginxPid, $state.mediaMtxPid)) {
     if ($processId -and (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
         & taskkill.exe /PID $processId /T /F | Out-Null
     }
