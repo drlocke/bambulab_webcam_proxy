@@ -109,8 +109,14 @@ try {
         (Join-Path $nginxDir 'temp\scgi_temp'),
         (Join-Path $nginxDir 'temp\uwsgi_temp')
     ) | ForEach-Object { New-Item $_ -ItemType Directory -Force | Out-Null }
+
+    $nginxTemplatePath = Join-Path $nginxDir 'conf\nginx.conf'
+    $nginxRuntimeConfigPath = Join-Path $runtimeDir 'nginx.conf'
+    $basePath = New-NginxRuntimeConfig -TemplatePath $nginxTemplatePath -OutputPath $nginxRuntimeConfigPath -NginxDirectory $nginxDir -BasePath $config.BasePath -HttpPort $config.HttpPort
+
     $nginxPrefix = $nginxDir.Replace('\', '/') + '/'
-    $nginxArgs = '-p "{0}" -c conf/nginx.conf' -f $nginxPrefix
+    $nginxRuntimeConfigArgument = $nginxRuntimeConfigPath.Replace('\', '/')
+    $nginxArgs = '-p "{0}" -c "{1}"' -f $nginxPrefix, $nginxRuntimeConfigArgument
     $nginxTestOut = Join-Path $logDir 'nginx-test.log'
     $nginxTestErr = Join-Path $logDir 'nginx-test-error.log'
     $nginxTest = Start-Process $nginxExe -ArgumentList "$nginxArgs -t" -WorkingDirectory $nginxDir -RedirectStandardOutput $nginxTestOut -RedirectStandardError $nginxTestErr -Wait -PassThru -WindowStyle Hidden
@@ -125,6 +131,10 @@ try {
     }
     $nginx = Start-Process $nginxExe -ArgumentList $nginxArgs -WorkingDirectory $nginxDir -RedirectStandardOutput $nginxOut -RedirectStandardError $nginxErr -PassThru -WindowStyle Hidden
     Wait-HttpReady "http://127.0.0.1:$($config.HttpPort)/health" | Out-Null
+    Wait-HttpReady "http://127.0.0.1:$($config.HttpPort)/" | Out-Null
+    if ($basePath -ne '/') {
+        Wait-HttpReady "http://127.0.0.1:$($config.HttpPort)$basePath" | Out-Null
+    }
 
     if ($sourceMode -eq 'studio-rtp') {
         $supervisorArgs = @(

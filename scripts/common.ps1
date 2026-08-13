@@ -45,6 +45,62 @@ function Test-ProcessId {
     return $null -ne (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
 }
 
+function New-NginxRuntimeConfig {
+    param(
+        [string] $TemplatePath,
+        [string] $OutputPath,
+        [string] $NginxDirectory,
+        [string] $BasePath,
+        [int] $HttpPort,
+        [string] $ErrorLogPath = 'logs/error.log',
+        [string] $PidPath = 'logs/nginx.pid'
+    )
+
+    $normalizedBasePath = if ([string]::IsNullOrWhiteSpace($BasePath) -or $BasePath -eq '/') {
+        '/'
+    } else {
+        '/' + $BasePath.Trim('/') + '/'
+    }
+    if ($normalizedBasePath -ne '/' -and $normalizedBasePath -notmatch '^/(?:[A-Za-z0-9._~-]+/)+$') {
+        throw "BasePath '$normalizedBasePath' contains characters that cannot be used in the nginx location."
+    }
+
+    $basePathLocations = ''
+    if ($normalizedBasePath -ne '/') {
+        $basePathWithoutSlash = $normalizedBasePath.TrimEnd('/')
+        $basePathLocations = @'
+        location = __BASE_PATH_WITHOUT_SLASH__ {
+            return 308 __BASE_PATH__;
+        }
+
+        location __BASE_PATH__ {
+            proxy_pass http://127.0.0.1:__HTTP_PORT__/;
+            proxy_redirect ~^/(.*)$ __BASE_PATH__$1;
+            proxy_http_version 1.1;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_buffering off;
+            proxy_request_buffering off;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+'@
+        $basePathLocations = $basePathLocations.Replace('__BASE_PATH_WITHOUT_SLASH__', $basePathWithoutSlash).Replace('__BASE_PATH__', $normalizedBasePath).Replace('__HTTP_PORT__', [string]$HttpPort)
+    }
+
+    $template = [IO.File]::ReadAllText($TemplatePath)
+    if (-not $template.Contains('        # BASE_PATH_LOCATIONS')) {
+        throw "nginx template '$TemplatePath' does not contain the base-path marker."
+    }
+    $mimeTypesPath = (Join-Path $NginxDirectory 'conf\mime.types').Replace('\', '/')
+    $normalizedErrorLogPath = $ErrorLogPath.Replace('\', '/')
+    $normalizedPidPath = $PidPath.Replace('\', '/')
+    $runtimeConfig = $template.Replace('error_log logs/error.log warn;', "error_log `"$normalizedErrorLogPath`" warn;").Replace('pid logs/nginx.pid;', "pid `"$normalizedPidPath`";").Replace('    include mime.types;', "    include `"$mimeTypesPath`";").Replace('        listen 8090;', "        listen $HttpPort;").Replace('        # BASE_PATH_LOCATIONS', $basePathLocations)
+    [IO.File]::WriteAllText($OutputPath, $runtimeConfig, (New-Object Text.UTF8Encoding($false)))
+    return $normalizedBasePath
+}
+
 function Get-NodeToolchain {
     param(
         [string] $Root,

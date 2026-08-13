@@ -130,12 +130,13 @@ $serviceHealthy = $processesHealthy -and $webHealthy -and $mediaHealthy -and $ba
 $startedAt = [datetime]::Parse($state.startedAt)
 $uptime = (Get-Date) - $startedAt
 $uptimeText = '{0}d {1:00}h {2:00}m {3:00}s' -f [math]::Floor($uptime.TotalDays), $uptime.Hours, $uptime.Minutes, $uptime.Seconds
+$basePath = if ([string]::IsNullOrWhiteSpace($config.BasePath) -or $config.BasePath -eq '/') { '/' } else { '/' + $config.BasePath.Trim('/') + '/' }
 
 Write-Host "Status:  $(if ($serviceHealthy) { 'running' } else { 'degraded' })"
 Write-Host "Started: $($startedAt.ToString('yyyy-MM-dd HH:mm:ss')) ($uptimeText)"
 Write-Host "Source:  $($state.sourceMode)"
 Write-Host "Stream:  $(if ($streamReady) { 'ready' } elseif ($state.sourceMode -eq 'multi') { 'no active streams' } else { 'waiting for camera' })"
-Write-Host "Player:  http://127.0.0.1:$($config.HttpPort)/"
+Write-Host "Player:  http://127.0.0.1:$($config.HttpPort)$basePath"
 Write-Host "Logs:    $logDir"
 Write-Host ''
 Write-Host 'Components:'
