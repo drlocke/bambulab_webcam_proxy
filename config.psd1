@@ -4,6 +4,7 @@
     CameraUrlFile = ''
     PrinterStreamUrl = ''
     HttpPort = 8090
+    BasePath = '/'
     StreamName = 'bambu'
     BambuApiBaseUrl = 'https://api.bambulab.com'
     BambuRegion = ''

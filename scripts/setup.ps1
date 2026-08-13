@@ -108,7 +108,9 @@ if (-not (Test-Path $nginxExe)) {
 
 if (-not $SkipWebBuild) {
     Push-Location (Join-Path $root 'web')
+    $previousBasePath = $env:VITE_BASE_PATH
     try {
+        $env:VITE_BASE_PATH = $config.BasePath
         if (Test-Path 'package-lock.json') {
             & $nodeToolchain.Npm ci
         } else {
@@ -118,6 +120,7 @@ if (-not $SkipWebBuild) {
         & $nodeToolchain.Npm run build
         if ($LASTEXITCODE -ne 0) { throw 'React example build failed.' }
     } finally {
+        $env:VITE_BASE_PATH = $previousBasePath
         Pop-Location
     }
 }

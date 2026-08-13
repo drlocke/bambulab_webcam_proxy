@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { withBasePath } from './paths';
 
 const streamName = 'bambu';
 
@@ -103,12 +104,12 @@ export function NativePlayer() {
       </header>
 
       <section className="viewer" aria-label="Printer camera stream">
-        <WhepPlayer whepUrl={`/webrtc/${streamName}/whep`} title="Bambu printer live stream" controls onStatus={handleStatus} />
+        <WhepPlayer whepUrl={withBasePath(`/webrtc/${streamName}/whep`)} title="Bambu printer live stream" controls onStatus={handleStatus} />
         {!ready && <div className="waiting">Waiting for camera frames</div>}
       </section>
 
       <footer className="legacy-footer">
-        <a href="/">Embedded player</a>
+        <a href={withBasePath('/')}>Embedded player</a>
         <p>WHEP / RTCPeerConnection</p>
       </footer>
     </main>

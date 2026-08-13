@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Camera, Grid2X2, List, LogOut, RefreshCw, VideoOff, X } from 'lucide-react';
+import { withBasePath } from './paths';
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(withBasePath(path), {
     ...options,
     headers: options.body ? { 'Content-Type': 'application/json', ...options.headers } : options.headers,
   });
@@ -90,7 +91,9 @@ function Login({ onAuthenticated }) {
 function StreamTile({ printer, stream, controls = false }) {
   const failed = stream?.status === 'error';
   const live = stream?.status === 'live';
-  const playerUrl = stream?.whepUrl?.replace(/\/whep$/, `?autoplay=true&muted=true&controls=${controls}`);
+  const playerUrl = stream?.whepUrl
+    ? withBasePath(stream.whepUrl.replace(/\/whep$/, `?autoplay=true&muted=true&controls=${controls}`))
+    : null;
   return (
     <article className="stream-tile" data-offline={!printer.online}>
       <div className="stream-media">

@@ -60,8 +60,9 @@ Bambu login request. It is never stored in the browser or server session.
 
 ## HTTPS deployment
 
-The default nginx listener is loopback-only HTTP and is intended for one
-machine. Before exposing the console to a network:
+The default nginx listener accepts HTTP connections on all network interfaces,
+while backend and MediaMTX control ports remain loopback-only. Before exposing
+the console beyond a trusted LAN:
 
 1. Put it behind an HTTPS reverse proxy with its own access controls.
 2. Restrict direct access to ports `8787`, `8889`, `8554`, and `9997`.
@@ -75,6 +76,10 @@ machine. Before exposing the console to a network:
 
 Do not enable `SecureCookies` while accessing the application directly over
 HTTP; browsers will correctly refuse to send that cookie.
+
+See [HTTPS reverse proxy deployment](reverse-proxy.md) for the complete nginx
+configuration, WebRTC port requirements, firewall guidance, and validation
+steps.
 
 ## How sessions work
 

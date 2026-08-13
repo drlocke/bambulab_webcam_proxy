@@ -128,7 +128,7 @@ logged or returned to the browser.
 
 ```powershell
 .\start_streaming.bat
-.\check_instances.bat
+.\status_streaming.bat
 .\stop_streaming.bat
 ```
 
@@ -139,6 +139,12 @@ The CameraTools pipeline is supervised and restarted after unexpected exits.
 In `Multi` mode, encrypted login sessions survive browser refreshes and service
 restarts. Signing out stops that session's active publishers.
 
+`status_streaming.bat` reports every background component with its PID, service
+uptime, endpoint health, and stream readiness. If the service is degraded, it
+also prints the latest error-log lines. Run `status_streaming.bat -Logs` to show
+them even while the service is healthy. The older `check_instances.bat` remains
+available as an alias.
+
 Default local endpoints:
 
 | Purpose | URL |
@@ -148,6 +154,35 @@ Default local endpoints:
 | WebRTC player | `http://127.0.0.1:8090/webrtc/bambu/` |
 | WHEP endpoint | `http://127.0.0.1:8090/webrtc/bambu/whep` |
 | Service health | `http://127.0.0.1:8090/health` |
+
+### Network access
+
+nginx listens on TCP port `8090` on all network interfaces. MediaMTX control,
+RTSP, WebRTC signaling, and the Multi backend remain bound to loopback and are
+reached only through nginx. To allow clients on the same trusted LAN, run these
+commands once in an elevated PowerShell window:
+
+```powershell
+New-NetFirewallRule -DisplayName 'Bambu Webcam HTTP' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8090 -RemoteAddress LocalSubnet -Profile Private,Domain
+New-NetFirewallRule -DisplayName 'Bambu Webcam WebRTC UDP' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 8189 -RemoteAddress LocalSubnet -Profile Private,Domain
+New-NetFirewallRule -DisplayName 'Bambu Webcam WebRTC TCP' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8189 -RemoteAddress LocalSubnet -Profile Private,Domain
+```
+
+Then open `http://SERVER_LAN_IP:8090/`. MediaMTX advertises addresses from the
+server's network interfaces automatically. Keep ports `8787`, `8889`, `8554`,
+and `9997` blocked; they are internal services, not public entry points. If the
+server network is classified as `Public`, verify the adapter and deliberately
+change it to `Private` instead of enabling these rules for public networks.
+
+For access across the internet, do not publish port `8090` as unauthenticated
+plain HTTP. Put nginx behind an HTTPS reverse proxy with access control, forward
+UDP `8189` (and optionally TCP `8189` as fallback) to this server, and add the
+public DNS name or IP to `webrtcAdditionalHosts` in both `mediamtx.yml` and
+`mediamtx-studio.yml`. Multi deployments behind HTTPS must also enable
+`SecureCookies`; Legacy mode has no application authentication and therefore
+requires authentication at the reverse proxy. See
+[HTTPS reverse proxy deployment](docs/reverse-proxy.md) for a complete nginx
+virtual host, firewall rules, and validation steps.
 
 In `Multi` mode, `/` becomes the account and printer console. The legacy
 `/webrtc/bambu/` route remains available only when a legacy source publishes the
@@ -199,7 +234,19 @@ in ignored `config.local.psd1`; keys there override the defaults.
 Use `scripts\configure.ps1` to create or update that file automatically. The
 multi-printer service uses internal port `8787`; only nginx should access it.
 
-When exposing the service beyond localhost, add TLS and authentication at the
-reverse proxy and configure `webrtcAdditionalHosts` in both MediaMTX files with
-the server address reachable by browsers. The default configuration deliberately
-binds HTTP and control interfaces to loopback only.
+For deployment below an existing HTTPS URL prefix, configure the path before
+running setup so the frontend is built with matching asset and service URLs:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Legacy -BasePath /bambucam/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+```
+
+The reverse proxy must strip the prefix when forwarding requests. See
+[HTTPS reverse proxy deployment](docs/reverse-proxy.md#subpath) for the complete
+nginx configuration.
+
+When exposing the service beyond a trusted LAN, add TLS and authentication at
+the reverse proxy. The default configuration keeps all control interfaces bound
+to loopback; only nginx HTTP and the WebRTC media port listen on network
+interfaces.

@@ -4,6 +4,8 @@ param(
     [string] $Mode,
     [string] $Region = '',
     [string] $PrinterStreamUrl = '',
+    [ValidatePattern('^/(?:[^/]+(?:/[^/]+)*)?/?$')]
+    [string] $BasePath = '',
     [switch] $SecureCookies
 )
 
@@ -19,6 +21,9 @@ if (Test-Path $localConfigPath) {
 
 $settings.DeploymentMode = $Mode
 if ($PrinterStreamUrl) { $settings.PrinterStreamUrl = $PrinterStreamUrl }
+if ($BasePath) {
+    $settings.BasePath = if ($BasePath -eq '/') { '/' } else { '/' + $BasePath.Trim('/') + '/' }
+}
 
 if ($Mode -eq 'Multi') {
     if (-not $Region -and $settings.Contains('BambuRegion')) { $Region = $settings.BambuRegion }

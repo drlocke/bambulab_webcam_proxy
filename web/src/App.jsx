@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { LegacyApp } from './LegacyApp';
 import { MultiApp } from './MultiApp';
+import { withBasePath } from './paths';
 
 export function App() {
   const [mode, setMode] = useState('loading');
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/config', { cache: 'no-store', signal: controller.signal })
+    fetch(withBasePath('/api/config'), { cache: 'no-store', signal: controller.signal })
       .then((response) => response.ok ? response.json() : null)
       .then((config) => setMode(config?.mode === 'multi' ? 'multi' : 'legacy'))
       .catch((error) => {
