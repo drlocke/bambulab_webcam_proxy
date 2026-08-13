@@ -101,10 +101,28 @@ try {
 
     $nginxDir = Join-Path $root 'nginx'
     $nginxExe = Join-Path $root 'tools\nginx\nginx.exe'
+    @(
+        (Join-Path $nginxDir 'logs'),
+        (Join-Path $nginxDir 'temp\client_body_temp'),
+        (Join-Path $nginxDir 'temp\fastcgi_temp'),
+        (Join-Path $nginxDir 'temp\proxy_temp'),
+        (Join-Path $nginxDir 'temp\scgi_temp'),
+        (Join-Path $nginxDir 'temp\uwsgi_temp')
+    ) | ForEach-Object { New-Item $_ -ItemType Directory -Force | Out-Null }
     $nginxPrefix = $nginxDir.Replace('\', '/') + '/'
     $nginxArgs = '-p "{0}" -c conf/nginx.conf' -f $nginxPrefix
-    $nginxTest = Start-Process $nginxExe -ArgumentList "$nginxArgs -t" -WorkingDirectory $nginxDir -Wait -PassThru -WindowStyle Hidden
-    if ($nginxTest.ExitCode -ne 0) { throw 'nginx configuration validation failed.' }
+    $nginxTestOut = Join-Path $logDir 'nginx-test.log'
+    $nginxTestErr = Join-Path $logDir 'nginx-test-error.log'
+    $nginxTest = Start-Process $nginxExe -ArgumentList "$nginxArgs -t" -WorkingDirectory $nginxDir -RedirectStandardOutput $nginxTestOut -RedirectStandardError $nginxTestErr -Wait -PassThru -WindowStyle Hidden
+    if ($nginxTest.ExitCode -ne 0) {
+        $nginxDiagnostic = Get-Content $nginxTestErr -Raw -ErrorAction SilentlyContinue
+        if ([string]::IsNullOrWhiteSpace($nginxDiagnostic)) {
+            $nginxDiagnostic = "See '$nginxTestErr'."
+        } else {
+            $nginxDiagnostic = $nginxDiagnostic.Trim()
+        }
+        throw "nginx configuration validation failed: $nginxDiagnostic"
+    }
     $nginx = Start-Process $nginxExe -ArgumentList $nginxArgs -WorkingDirectory $nginxDir -RedirectStandardOutput $nginxOut -RedirectStandardError $nginxErr -PassThru -WindowStyle Hidden
     Wait-HttpReady "http://127.0.0.1:$($config.HttpPort)/health" | Out-Null
 
