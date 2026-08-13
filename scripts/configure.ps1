@@ -48,4 +48,5 @@ foreach ($entry in $settings.GetEnumerator()) {
 }
 $lines += '}'
 [IO.File]::WriteAllLines($localConfigPath, $lines, (New-Object Text.UTF8Encoding($false)))
-Write-Host "Configured $Mode deployment mode in config.local.psd1."
+$effectiveBasePath = if ($settings.Contains('BasePath')) { $settings.BasePath } else { '/' }
+Write-Host "Configured $Mode deployment mode with public base path '$effectiveBasePath' in config.local.psd1."

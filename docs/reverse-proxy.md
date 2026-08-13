@@ -74,14 +74,19 @@ and WebRTC URLs with the correct prefix:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Legacy -BasePath /bambucam/
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /bambucam/
 ```
+
+`config.local.psd1` overrides values from `config.psd1`. Do not set a conflicting
+`BasePath` in the local file. Passing `-BasePath /bambucam/` to setup explicitly
+overrides both files for that build. Setup prints the effective public base path
+and verifies the generated asset prefix before reporting success.
 
 For Multi mode, retain the required region and secure-cookie options:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Multi -Region eu -SecureCookies -BasePath /bambucam/
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /bambucam/
 ```
 
 Replace the old static `/hls` block with these locations in the existing HTTPS

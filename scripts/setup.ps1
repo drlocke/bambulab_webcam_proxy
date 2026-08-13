@@ -1,12 +1,23 @@
 param(
     [switch] $SkipWebBuild,
-    [ValidateSet('Legacy', 'Multi')][string] $Mode = ''
+    [ValidateSet('Legacy', 'Multi')][string] $Mode = '',
+    [ValidatePattern('^/(?:[^/]+(?:/[^/]+)*)?/?$')]
+    [string] $BasePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'common.ps1')
 $config = Get-ProjectConfig $root
+$defaultConfig = Import-PowerShellDataFile (Join-Path $root 'config.psd1')
+$localConfigPath = Join-Path $root 'config.local.psd1'
+$localConfig = if (Test-Path $localConfigPath) { Import-PowerShellDataFile $localConfigPath } else { @{} }
+
+if ($BasePath) {
+    $config.BasePath = if ($BasePath -eq '/') { '/' } else { '/' + $BasePath.Trim('/') + '/' }
+} elseif ($localConfig.ContainsKey('BasePath') -and $localConfig.BasePath -ne $defaultConfig.BasePath) {
+    Write-Warning "config.local.psd1 overrides BasePath from '$($defaultConfig.BasePath)' to '$($localConfig.BasePath)'."
+}
 
 if ($Mode) {
     Write-Host "Requested deployment mode: $Mode"
@@ -107,11 +118,13 @@ if (-not (Test-Path $nginxExe)) {
 }
 
 if (-not $SkipWebBuild) {
+    $webBasePath = if ([string]::IsNullOrWhiteSpace($config.BasePath)) { '/' } else { $config.BasePath }
+    Write-Host "Building web application for public base path '$webBasePath'..."
     Push-Location (Join-Path $root 'web')
     $previousBasePath = $env:VITE_BASE_PATH
     $previousPath = $env:PATH
     try {
-        $env:VITE_BASE_PATH = $config.BasePath
+        $env:VITE_BASE_PATH = $webBasePath
         $env:PATH = "$(Split-Path $nodeToolchain.Node -Parent);$previousPath"
         if (Test-Path 'package-lock.json') {
             & $nodeToolchain.Npm ci
@@ -121,6 +134,12 @@ if (-not $SkipWebBuild) {
         if ($LASTEXITCODE -ne 0) { throw 'npm dependency installation failed.' }
         & $nodeToolchain.Npm run build
         if ($LASTEXITCODE -ne 0) { throw 'React example build failed.' }
+
+        $builtIndex = [IO.File]::ReadAllText((Join-Path $root 'nginx\html\index.html'))
+        $expectedAssetPrefix = if ($webBasePath -eq '/') { '/assets/' } else { "${webBasePath}assets/" }
+        if (-not $builtIndex.Contains($expectedAssetPrefix)) {
+            throw "Web build validation failed: index.html does not reference '$expectedAssetPrefix'."
+        }
     } finally {
         $env:VITE_BASE_PATH = $previousBasePath
         $env:PATH = $previousPath

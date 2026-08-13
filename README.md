@@ -239,7 +239,7 @@ running setup so the frontend is built with matching asset and service URLs:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Legacy -BasePath /bambucam/
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /bambucam/
 ```
 
 The reverse proxy must strip the prefix when forwarding requests. See
