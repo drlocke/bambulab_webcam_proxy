@@ -68,7 +68,9 @@ the console beyond a trusted LAN:
 2. Restrict direct access to ports `8787`, `8889`, `8554`, and `9997`.
 3. Configure MediaMTX `webrtcAdditionalHosts` with the address browsers can
    reach.
-4. Enable secure session cookies:
+4. Allow UDP `8189` and TCP `8189` from browsers to MediaMTX through Windows
+  Firewall and every VLAN, VPN, router, NAT, or cloud firewall on the path.
+5. Enable secure session cookies:
 
    ```powershell
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Multi -Region eu -SecureCookies
@@ -152,8 +154,14 @@ Common failures:
   `bambu_stream_url` mapping.
 - **Session disappears after restart:** keep `MultiSessionSecret` unchanged and
   ensure `runtime\server` is writable.
-- **Video works locally but not remotely:** configure HTTPS, firewall rules, and
-  MediaMTX WebRTC reachable hosts. Never expose the MediaMTX control API.
+- **Video works locally but not remotely:** HTTPS and WHEP signaling can be
+  healthy while ICE media is blocked. Verify MediaMTX listens on UDP/TCP
+  `8189`, globally allow those ports in Windows Firewall, permit them through
+  every intervening VLAN/VPN firewall, and configure a browser-reachable
+  `webrtcAdditionalHosts` candidate. TCP can be checked with
+  `Test-NetConnection`; validate UDP with firewall counters or packet capture.
+  Use TURN when no direct path is possible. Never expose the MediaMTX control
+  API. The iframe and native React player have identical ICE requirements.
 - **Video flashes roughly once per second in Chromium on Windows:** confirm the
   page is using the current built assets. This can be a direct GPU-overlay
   presentation defect at H.264 keyframes, not browser caching or a WebRTC

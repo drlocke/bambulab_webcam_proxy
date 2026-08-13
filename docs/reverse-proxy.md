@@ -21,7 +21,7 @@ to MediaMTX on UDP port `8189`, with TCP `8189` available as a fallback.
 ## Choose a hostname or subpath
 
 A dedicated hostname such as `printercam.example.com` is the simplest option.
-The application can also be built for a subpath such as `/bambucam/`. The
+The application can also be built for a subpath such as `/camera-app/`. The
 configured path must end with `/`, and the external nginx must remove that
 prefix before forwarding requests to the project nginx.
 
@@ -73,31 +73,31 @@ Configure the public base path before running setup so Vite builds asset, API,
 and WebRTC URLs with the correct prefix:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Legacy -BasePath /bambucam/
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /bambucam/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Legacy -BasePath /camera-app/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /camera-app/
 ```
 
 `config.local.psd1` overrides values from `config.psd1`. Do not set a conflicting
-`BasePath` in the local file. Passing `-BasePath /bambucam/` to setup explicitly
+`BasePath` in the local file. Passing `-BasePath /camera-app/` to setup explicitly
 overrides both files for that build. Setup prints the effective public base path
 and verifies the generated asset prefix before reporting success.
 
 For Multi mode, retain the required region and secure-cookie options:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Multi -Region eu -SecureCookies -BasePath /bambucam/
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /bambucam/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Multi -Region eu -SecureCookies -BasePath /camera-app/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /camera-app/
 ```
 
 Replace the old static `/hls` block with these locations in the existing HTTPS
 server:
 
 ```nginx
-location = /bambucam {
-    return 308 /bambucam/;
+location = /camera-app {
+    return 308 /camera-app/;
 }
 
-location /bambucam/ {
+location /camera-app/ {
     proxy_pass http://127.0.0.1:8090/;
     proxy_http_version 1.1;
 
@@ -106,7 +106,7 @@ location /bambucam/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
 
-    proxy_redirect ~^/(.*)$ /bambucam/$1;
+    proxy_redirect ~^/(.*)$ /camera-app/$1;
     proxy_buffering off;
     proxy_request_buffering off;
     proxy_read_timeout 3600s;
@@ -114,8 +114,8 @@ location /bambucam/ {
 }
 ```
 
-The trailing slash in both `location /bambucam/` and `proxy_pass ...:8090/` is
-significant. It makes nginx forward `/bambucam/api/config` as `/api/config`.
+The trailing slash in both `location /camera-app/` and `proxy_pass ...:8090/` is
+significant. It makes nginx forward `/camera-app/api/config` as `/api/config`.
 `proxy_redirect` performs the inverse translation for WHEP session URLs
 returned by MediaMTX.
 
@@ -126,9 +126,9 @@ host. If browser diagnostics show requests to
 redirect behavior is blocked by browsers as mixed content.
 
 After rebuilding and restarting, direct local access works at both
-`http://127.0.0.1:8090/` and `http://127.0.0.1:8090/bambucam/`. The root page
+`http://127.0.0.1:8090/` and `http://127.0.0.1:8090/camera-app/`. The root page
 loads the same subpath-aware build; its assets, API calls, and Legacy player
-iframe continue below `/bambucam/`.
+iframe continue below `/camera-app/`.
 
 ## Advertise the public WebRTC host
 
@@ -157,6 +157,28 @@ When nginx and this project run on the same machine, keep project port `8090`
 restricted to that machine or the trusted LAN. When they run on different
 machines, allow TCP `8090` only from the reverse proxy address.
 
+On the Windows host running MediaMTX, open both ICE transports globally at the
+host-firewall layer. Run once in an elevated PowerShell window:
+
+```powershell
+foreach ($protocol in @('UDP', 'TCP')) {
+    $name = "Bambu Webcam WebRTC $protocol"
+    $rule = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue
+    if ($rule) {
+        $rule | Set-NetFirewallRule -Enabled True -Profile Any -Direction Inbound -Action Allow
+        $rule | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -RemoteAddress Any
+    } else {
+        New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Protocol $protocol -LocalPort 8189 -RemoteAddress Any -Profile Any
+    }
+}
+```
+
+`RemoteAddress Any` and `Profile Any` intentionally impose no source-network
+restriction in Windows Firewall. This does not open a router, VLAN firewall,
+VPN policy, cloud security group, or NAT gateway. Apply equivalent UDP/TCP
+`8189` rules or forwards at every such boundary. Restrict access there instead
+if the deployment requires source filtering.
+
 Do not expose ports `8554`, `8787`, `8889`, or `9997`. They are internal RTSP,
 backend, signaling, and control interfaces.
 
@@ -166,6 +188,66 @@ Windows Firewall and the provider security group. If carrier-grade NAT or a
 restrictive client network prevents direct ICE connectivity, deploy a TURN
 server and configure `webrtcICEServers2` instead of exposing additional internal
 services.
+
+### Routed VLANs
+
+HTTPS and WHEP signaling can succeed while video still fails because WebRTC
+media connects directly to port `8189`; it does not pass through nginx. A
+sequence of WHEP `POST 201`, `PATCH 204`, followed roughly 10-20 seconds later
+by `peer connection closed` identifies an ICE connectivity failure.
+
+Do not use `LocalSubnet` when the host rule is intended to accept routed VLAN or
+VPN clients; Windows may treat only directly attached networks as local. The
+following idempotent commands make the existing ICE rules global, or create
+them when missing:
+
+```powershell
+foreach ($protocol in @('UDP', 'TCP')) {
+    $name = "Bambu Webcam WebRTC $protocol"
+    $rule = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue
+    if ($rule) {
+        $rule | Set-NetFirewallRule -Enabled True -Profile Any -Direction Inbound -Action Allow
+        $rule | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -RemoteAddress Any
+    } else {
+        New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Protocol $protocol -LocalPort 8189 -RemoteAddress Any -Profile Any
+    }
+}
+```
+
+Also allow UDP `8189` and TCP `8189` between client and server networks on the
+router, VPN concentrator, or network firewall. A host rule cannot override a
+drop at an intermediate gateway.
+
+First verify both MediaMTX listeners on the server:
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 8189
+Get-NetUDPEndpoint -LocalPort 8189
+Test-NetConnection 127.0.0.1 -Port 8189
+```
+
+Then test the TCP fallback from the affected client, replacing the placeholder
+with an address or hostname advertised by MediaMTX and reachable from that
+client:
+
+```powershell
+Test-NetConnection MEDIA_SERVER_HOST -Port 8189
+```
+
+`TcpTestSucceeded` must be `True` for TCP fallback. If routing reaches the host
+but this test fails while the local listener test succeeds, inspect the Windows
+rule on the actual MediaMTX machine and every intermediate VLAN/VPN firewall.
+UDP remains the preferred transport and cannot be proven by
+`Test-NetConnection`; validate it through firewall counters or a packet capture
+while starting playback.
+
+The SDP answer must advertise at least one candidate the browser can route to.
+A correct private candidate is sufficient across a routed LAN or VPN; STUN is
+not required merely because client and server occupy different subnets. Add
+`webrtcAdditionalHosts` for NAT or public addressing, and use TURN through
+`webrtcICEServers2` when direct UDP/TCP connectivity cannot be provided. WHEP
+session cleanup can return `DELETE 404` after an ICE timeout; that is a
+consequence of the failed media session, not the cause.
 
 ## Multi-mode cookies
 
@@ -187,13 +269,15 @@ procedure. From a client outside the server, check:
 ```powershell
 Invoke-WebRequest https://printercam.example.com/health
 # Subpath deployment:
-Invoke-WebRequest https://srv-wis.dscsag.net/bambucam/health
+Invoke-WebRequest https://printercam.example.com/camera-app/health
 ```
 
 A healthy HTTP path returns status `200` and body `ok`. Then open the configured
 public URL and start a camera. If the page and API load
-but video remains on `Connecting`, verify UDP `8189`, the router or cloud
-firewall, and `webrtcAdditionalHosts`. If the page itself fails, inspect the
+but video remains on `Connecting`, verify UDP/TCP `8189`, the VLAN/router/cloud
+firewall, and `webrtcAdditionalHosts`. This requirement is identical for the
+embedded iframe and a custom `RTCPeerConnection`, and for both Legacy and Multi
+mode. If the page itself fails, inspect the
 existing nginx error log and verify that the project reports `running` through
 `status_streaming.bat`.
 

@@ -38,6 +38,45 @@ avoid a confirmed Chromium/Windows direct-overlay flash at H.264 keyframes. The
 guard changes only browser presentation and does not alter WHEP signaling or
 the decoded frames.
 
+## Embedded player or native player
+
+The main Legacy page embeds MediaMTX's player in an iframe. That page creates
+and manages an `RTCPeerConnection` internally. The native example creates the
+connection in application code and attaches its incoming track to a
+React-managed `video` element. Both use WHEP signaling and the same WebRTC media
+transport; native does not mean a direct connection to the printer.
+
+Choose the iframe when standard controls and MediaMTX's retry behavior are
+enough. It has the smallest integration and maintenance surface. Choose the
+native approach for application-owned controls, connection telemetry, custom
+retry behavior, accessibility, or coordinated stream switching. Native clients
+must correctly implement SDP offer/answer exchange, WHEP session URL handling,
+cleanup, failure states, and retries. A complete reusable example and a
+side-by-side comparison are in the README's
+[React Embedding](../README.md#react-embedding) section.
+
+The fixed `/webrtc/bambu/` player and `/webrtc/bambu/whep` endpoint apply to the
+Legacy `bambu` stream. Multi mode creates opaque stream paths after an
+authenticated API request. Use the returned stream URL; never hard-code a
+printer ID, source descriptor, or the Legacy path into a Multi client.
+
+## Browser network requirements
+
+For either player, the browser needs two independent paths:
+
+1. HTTP `8090` locally, or HTTPS `443` through the reverse proxy, loads the
+  application and carries WHEP signaling.
+2. UDP `8189` connects directly to MediaMTX for ICE/WebRTC media. TCP `8189`
+  provides the recommended fallback.
+
+The iframe does not tunnel video through HTTPS. Successful page loading and
+successful WHEP requests therefore do not prove that media can flow. When a
+player remains on `Connecting`, verify the MediaMTX listeners, candidate
+address, Windows Firewall, and all VLAN, VPN, router, NAT, and cloud firewall
+boundaries. These requirements are the same in Legacy and Multi modes. See
+[HTTPS reverse proxy deployment](reverse-proxy.md#firewall-and-nat) for global
+Windows rules, routed-network diagnostics, NAT, and TURN guidance.
+
 ## Authentication requirements
 
 ### Local printer RTSP

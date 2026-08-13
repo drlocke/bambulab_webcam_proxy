@@ -159,20 +159,38 @@ Default local endpoints:
 
 nginx listens on TCP port `8090` on all network interfaces. MediaMTX control,
 RTSP, WebRTC signaling, and the Multi backend remain bound to loopback and are
-reached only through nginx. To allow clients on the same trusted LAN, run these
-commands once in an elevated PowerShell window:
+reached only through nginx. MediaMTX's ICE media listener is the exception: it
+listens on UDP and TCP port `8189` so browsers can receive WebRTC media.
+
+To allow connections from any remote address on every Windows network profile,
+run these commands once in an elevated PowerShell window:
 
 ```powershell
-New-NetFirewallRule -DisplayName 'Bambu Webcam HTTP' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8090 -RemoteAddress LocalSubnet -Profile Private,Domain
-New-NetFirewallRule -DisplayName 'Bambu Webcam WebRTC UDP' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 8189 -RemoteAddress LocalSubnet -Profile Private,Domain
-New-NetFirewallRule -DisplayName 'Bambu Webcam WebRTC TCP' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8189 -RemoteAddress LocalSubnet -Profile Private,Domain
+New-NetFirewallRule -DisplayName 'Bambu Webcam HTTP' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8090 -RemoteAddress Any -Profile Any
+New-NetFirewallRule -DisplayName 'Bambu Webcam WebRTC UDP' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 8189 -RemoteAddress Any -Profile Any
+New-NetFirewallRule -DisplayName 'Bambu Webcam WebRTC TCP' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8189 -RemoteAddress Any -Profile Any
+```
+
+These rules are intentionally not restricted by source network. They open the
+ports in Windows Firewall, but they do not create router port forwards or alter
+VLAN, VPN, cloud-security-group, or perimeter-firewall policies. Those devices
+must allow the same traffic separately. Expose `8090` beyond a trusted network
+only when an authenticated HTTPS reverse proxy protects it; Legacy mode has no
+built-in authentication.
+
+If rules with these names already exist, update them instead of creating
+duplicates:
+
+```powershell
+Get-NetFirewallRule -DisplayName 'Bambu Webcam HTTP' | Set-NetFirewallRule -Enabled True -Profile Any
+Get-NetFirewallRule -DisplayName 'Bambu Webcam HTTP' | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -RemoteAddress Any
+Get-NetFirewallRule -DisplayName 'Bambu Webcam WebRTC UDP','Bambu Webcam WebRTC TCP' | Set-NetFirewallRule -Enabled True -Profile Any
+Get-NetFirewallRule -DisplayName 'Bambu Webcam WebRTC UDP','Bambu Webcam WebRTC TCP' | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -RemoteAddress Any
 ```
 
 Then open `http://SERVER_LAN_IP:8090/`. MediaMTX advertises addresses from the
 server's network interfaces automatically. Keep ports `8787`, `8889`, `8554`,
-and `9997` blocked; they are internal services, not public entry points. If the
-server network is classified as `Public`, verify the adapter and deliberately
-change it to `Private` instead of enabling these rules for public networks.
+and `9997` blocked; they are internal services, not public entry points.
 
 For access across the internet, do not publish port `8090` as unauthenticated
 plain HTTP. Put nginx behind an HTTPS reverse proxy with access control, forward
@@ -190,8 +208,11 @@ In `Multi` mode, `/` becomes the account and printer console. The legacy
 
 ## React Embedding
 
-The simplest integration embeds MediaMTX's WebRTC player. Using a relative URL
-keeps signaling on the application's origin:
+### Embedded MediaMTX player
+
+The simplest integration embeds MediaMTX's complete WebRTC player. It owns its
+`RTCPeerConnection`, WHEP session, retry behavior, controls, and video element.
+Using a relative URL keeps signaling on the application's origin:
 
 ```jsx
 export function BambuCamera() {
@@ -214,13 +235,132 @@ export function BambuCamera() {
 }
 ```
 
+The URL above is the fixed `bambu` stream published by Legacy mode. When the
+application is deployed under a base path, prefix the URL accordingly, for
+example `/camera-app/webrtc/bambu/`. Multi mode uses opaque, dynamic stream
+paths: use the player URL returned or derived from the authenticated stream API
+instead of hard-coding `bambu`.
+
 The compositing properties prevent a confirmed once-per-keyframe flash on
 affected Chromium/Windows systems. Removing them is useful only as a diagnostic
 comparison; it does not select a different player or transport.
 
-For custom controls, connect a browser `RTCPeerConnection` directly to
-`/webrtc/bambu/whep` using the WHEP protocol. The included application source is
-under `web\src` and its production output is served from `nginx\html`.
+### Native RTCPeerConnection player
+
+Use a native player when the application must own the `video` element, custom
+controls, connection state, telemetry, retries, or stream switching. This
+complete React example gathers an ICE offer, creates a WHEP session, applies the
+SDP answer, renders the received track, and deletes the server session during
+cleanup:
+
+```jsx
+import { useEffect, useRef } from 'react';
+
+function waitForIceGathering(peerConnection) {
+  if (peerConnection.iceGatheringState === 'complete') return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const handleChange = () => {
+      if (peerConnection.iceGatheringState !== 'complete') return;
+      peerConnection.removeEventListener('icegatheringstatechange', handleChange);
+      resolve();
+    };
+    peerConnection.addEventListener('icegatheringstatechange', handleChange);
+  });
+}
+
+export function BambuWhepCamera({
+  whepUrl = '/webrtc/bambu/whep',
+  controls = true,
+}) {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    const peerConnection = new RTCPeerConnection();
+    let sessionUrl = null;
+
+    peerConnection.addTransceiver('video', { direction: 'recvonly' });
+    peerConnection.addEventListener('track', (event) => {
+      if (!videoRef.current) return;
+      videoRef.current.srcObject =
+        event.streams[0] ?? new MediaStream([event.track]);
+    });
+
+    async function connect() {
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      await waitForIceGathering(peerConnection);
+
+      const response = await fetch(whepUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/sdp' },
+        body: peerConnection.localDescription.sdp,
+        signal: abortController.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`WHEP request failed with HTTP ${response.status}`);
+      }
+
+      const location = response.headers.get('Location');
+      if (location) sessionUrl = new URL(location, window.location.href).toString();
+      await peerConnection.setRemoteDescription({
+        type: 'answer',
+        sdp: await response.text(),
+      });
+    }
+
+    connect().catch((error) => {
+      if (error.name !== 'AbortError') console.error(error);
+    });
+
+    return () => {
+      abortController.abort();
+      if (sessionUrl) {
+        fetch(sessionUrl, { method: 'DELETE', keepalive: true }).catch(() => {});
+      }
+      peerConnection.close();
+      if (videoRef.current) videoRef.current.srcObject = null;
+    };
+  }, [whepUrl]);
+
+  return <video ref={videoRef} autoPlay muted playsInline controls={controls} />;
+}
+```
+
+For a subpath deployment, pass the prefixed endpoint, for example
+`/camera-app/webrtc/bambu/whep`. In Multi mode, pass the authenticated stream
+creation response's relative `whepUrl`; do not replace it with the Legacy path.
+Production applications should also reconnect after failed or disconnected
+peer states, as the included `web/src/NativePlayer.jsx` does.
+
+### Why both players need port 8189
+
+The iframe changes who implements the player, not how media travels. Its
+embedded MediaMTX page creates an `RTCPeerConnection` internally. In the native
+example, application code creates the same kind of connection directly.
+Consequently, both variants require:
+
+| Traffic | Required for iframe | Required for native player | Purpose |
+| --- | --- | --- | --- |
+| HTTP `8090`, or HTTPS `443` through the reverse proxy | Yes | Yes | Load the page and perform WHEP signaling |
+| UDP `8189` from browser to MediaMTX | Yes | Yes | Preferred ICE/WebRTC media transport |
+| TCP `8189` from browser to MediaMTX | Recommended | Recommended | ICE fallback when UDP is unavailable |
+
+WHEP `POST`, `PATCH`, and `DELETE` requests can all succeed through nginx while
+the video remains on `Connecting`: signaling is then healthy, but ICE cannot
+reach `8189`. The HTTP reverse proxy does not carry the media stream. Across
+VLANs, VPNs, NAT, or the internet, allow or forward `8189` on every intervening
+firewall and advertise a browser-reachable address with
+`webrtcAdditionalHosts`. Use a TURN server through `webrtcICEServers2` when no
+direct UDP/TCP path can be provided.
+
+Choose the iframe for the smallest, most robust integration. Choose the native
+player only when direct React ownership justifies implementing connection
+state, retries, cleanup, accessibility, and controls yourself. Neither option
+removes the proxy, changes authentication, or avoids the ICE port requirement.
+The included application source is under `web\src` and its production output is
+served from `nginx\html`.
 
 Browsers cannot connect directly to printer RTSP/RTP or proprietary Bambu cloud
 tunnels. See [Direct browser playback](docs/direct-browser.md) for the native
@@ -238,8 +378,8 @@ For deployment below an existing HTTPS URL prefix, configure the path before
 running setup so the frontend is built with matching asset and service URLs:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Legacy -BasePath /bambucam/
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /bambucam/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\configure.ps1 -Mode Legacy -BasePath /camera-app/
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1 -BasePath /camera-app/
 ```
 
 The reverse proxy must strip the prefix when forwarding requests. See

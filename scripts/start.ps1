@@ -112,7 +112,7 @@ try {
 
     $nginxTemplatePath = Join-Path $nginxDir 'conf\nginx.conf'
     $nginxRuntimeConfigPath = Join-Path $runtimeDir 'nginx.conf'
-    $basePath = New-NginxRuntimeConfig -TemplatePath $nginxTemplatePath -OutputPath $nginxRuntimeConfigPath -NginxDirectory $nginxDir -BasePath $config.BasePath -HttpPort $config.HttpPort
+    $basePath = New-NginxRuntimeConfig -TemplatePath $nginxTemplatePath -OutputPath $nginxRuntimeConfigPath -NginxDirectory $nginxDir -BasePath $config.BasePath -HttpPort $config.HttpPort -DeploymentMode $config.DeploymentMode
 
     $nginxPrefix = $nginxDir.Replace('\', '/') + '/'
     $nginxRuntimeConfigArgument = $nginxRuntimeConfigPath.Replace('\', '/')

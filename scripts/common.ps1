@@ -52,6 +52,8 @@ function New-NginxRuntimeConfig {
         [string] $NginxDirectory,
         [string] $BasePath,
         [int] $HttpPort,
+        [ValidateSet('Legacy', 'Multi')]
+        [string] $DeploymentMode = 'Legacy',
         [string] $ErrorLogPath = 'logs/error.log',
         [string] $PidPath = 'logs/nginx.pid'
     )
@@ -93,10 +95,23 @@ function New-NginxRuntimeConfig {
     if (-not $template.Contains('        # BASE_PATH_LOCATIONS')) {
         throw "nginx template '$TemplatePath' does not contain the base-path marker."
     }
+    if (-not $template.Contains('        # DEPLOYMENT_MODE_LOCATIONS')) {
+        throw "nginx template '$TemplatePath' does not contain the deployment-mode marker."
+    }
+    $deploymentModeLocations = if ($DeploymentMode -eq 'Legacy') {
+@'
+        location = /api/config {
+            default_type application/json;
+            return 200 '{"mode":"legacy"}';
+        }
+'@
+    } else {
+        ''
+    }
     $mimeTypesPath = (Join-Path $NginxDirectory 'conf\mime.types').Replace('\', '/')
     $normalizedErrorLogPath = $ErrorLogPath.Replace('\', '/')
     $normalizedPidPath = $PidPath.Replace('\', '/')
-    $runtimeConfig = $template.Replace('error_log logs/error.log warn;', "error_log `"$normalizedErrorLogPath`" warn;").Replace('pid logs/nginx.pid;', "pid `"$normalizedPidPath`";").Replace('    include mime.types;', "    include `"$mimeTypesPath`";").Replace('        listen 8090;', "        listen $HttpPort;").Replace('        # BASE_PATH_LOCATIONS', $basePathLocations)
+    $runtimeConfig = $template.Replace('error_log logs/error.log warn;', "error_log `"$normalizedErrorLogPath`" warn;").Replace('pid logs/nginx.pid;', "pid `"$normalizedPidPath`";").Replace('    include mime.types;', "    include `"$mimeTypesPath`";").Replace('        listen 8090;', "        listen $HttpPort;").Replace('        # BASE_PATH_LOCATIONS', $basePathLocations).Replace('        # DEPLOYMENT_MODE_LOCATIONS', $deploymentModeLocations)
     [IO.File]::WriteAllText($OutputPath, $runtimeConfig, (New-Object Text.UTF8Encoding($false)))
     return $normalizedBasePath
 }
